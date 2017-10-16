@@ -1,0 +1,10 @@
+Type2 Bad results set 2 (61 items total):
+text screen fail 12100088_Type2.png
+text screen fail 11636877_Type2.png
+
+Type2 Bad results for set 1 (25 items total):
+text screen fail 11804382_Type2.png
+
+Type7 Bad results for set 2 (61 items total):
+None
+
