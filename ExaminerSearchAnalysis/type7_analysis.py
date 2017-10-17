@@ -103,9 +103,9 @@ def translate_date(monthday, year):
     day = monthday[3:]
     return year + "/" + month + "/" + day
 
-def recognize_and_rip(app_info, fwrap_path):
+def recognize_and_rip(app_info, fwrap_path,resolution):
     # Create image files for analysis
-    pdf_to_image.main(app_info["SRNT_files"],"first and last",fwrap_path)
+    pdf_to_image.main(app_info["SRNT_files"],"first and last",fwrap_path,resolution)
 
     # Analyze images for Type7 form
     counter = 0

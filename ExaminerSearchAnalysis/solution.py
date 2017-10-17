@@ -13,14 +13,18 @@ import collections
 from datetime import date
 from datetime import datetime
 import statistics
+import xlsxwriter
 
 import type7_analysis, type8_analysis, type2_analysis, pdf_to_image, pull_reed_files
 
 app_dir = "app_data"  # read apps from os.path.join(input_dir, <filename>)
 input_dir = "input"  # read images from os.path.join(input_dir, <filename>)
 output_dir = "output"  # write images to os.path.join(output_dir, <filename>)
+targetapp_file = "target_app_data.xlsx"
+allapp_file = "all_app_data.xlsx"
 error_output_file = "error_output.txt"
 error_output = []
+resolution = 600
 
 # Declare data structure
 app_data = collections.OrderedDict()
@@ -62,7 +66,7 @@ def create_dictionary_entry(app_num):
         "stat":None,"stat_date":None,"pub_num":None,"pub_date":None,"pat_num":None,"pat_date":None,
         "FOAM_date":None,"pre_amend":[],"rest_requ":[],"cont_data":[], "continuation?":None,
         "SRNT_num":0, "SRNT_type":[],"SRNT_check":None, "SRNT_files":[], "SRFW_occur":None,
-        "FOAM_FS_diff:":None,"FOAM_LS_diff:":None,"FOAM_S_median":None,"FOAM_S_mean":None,
+        "FOAM_FS_diff":None,"FOAM_LS_diff":None,"FOAM_S_median":None,"FOAM_S_mean":None,
         "analyze?":None, "SRNT_dates":{"Type2":[], "Type7":[], "Type8":[]}
     }
 
@@ -188,10 +192,17 @@ def examine_image_wrapper(app,path):
         # Loop through lines and record info
         for row in reversed(list(reader)):
             keys = list(row.items())
-            info_DATE= keys[0][1]
-            info_CODE = keys[1][1]
-            info_FNAME = keys[5][1]
-            info_DESC = keys[2][1]
+            d = {}
+            for key in keys: d[key[0]] = key[1]
+
+            if "Mail Room Date" in d: info_DATE= d["Mail Room Date"]
+            else: info_DATE = " "
+            if "Document Code" in d: info_CODE= d["Document Code"]
+            else: info_CODE = " "
+            if "Filename" in d: info_FNAME= d["Filename"]
+            else: info_FNAME = " "
+            if "Document Description" in d: info_DESC= d["Document Description"]
+            else: info_DESC = " "
 
             # "FOAM_date"     : <str>
             if info_CODE == "CTNF":
@@ -266,18 +277,223 @@ def examine_image_wrapper(app,path):
     # Succesful analysis; return True
     return True
 
-def file_rename(fwarp_fold,our_name):
-    file_list = os.listdir(fwarp_fold)
-    print(file_list)
+def write_app_data(data_in, findings, keys, file_out):
+    # Delete existing file if it exists
+    if os.path.isfile(file_out) == True:
+        os.remove(file_out)
 
-    num = our_name[-2]
-    old_name = our_name[:-3]
+    # Open a workbook and a worksheet
+    workbook = xlsxwriter.Workbook(file_out)
+    worksheet = workbook.add_worksheet()
+    worksheet.set_column(0,27,12)
+    worksheet.set_column(0,1,15)
+    worksheet.set_column(7,8,15)
+    worksheet.set_column(11,16,15)
+    worksheet.set_column(18,20,35)
+    worksheet.set_column(24,26,20)
+
+    # Set formats
+    header_format = workbook.add_format({'bold': True, 'font_color': 'black', 'align' : 'center'})
+    header_format.set_text_wrap()
+    text_format = workbook.add_format({'font_color': 'black', 'align' : 'center'})
+    text_format.set_text_wrap()
+    #date1_format = workbook.add_format({'font_color': 'black', 'num_format':'yyyy/mm/dd', 'align' : 'center'})
+    #date1_format.set_text_wrap()
+    #date2_format = workbook.add_format({'font_color': 'black', 'num_format':'mm/dd/yyy', 'align' : 'center'})
+    #date2_format.set_text_wrap()
+    int_format = workbook.add_format({'font_color': 'black', 'num_format':'0', 'align' : 'center'})
+    int_format.set_text_wrap() 
+    float_format = workbook.add_format({'font_color': 'black', 'num_format':'0.00', 'align' : 'center'})
+    float_format.set_text_wrap()
+    special_format = workbook.add_format({'font_color': 'red', 'num_format':'0.00', 'align' : 'center'})
+
+    # Write important findings
+    worksheet.write('A1', 'Average First Search Diff. (days):', header_format)
+    worksheet.write('A2', 'Average Last Search Diff. (days):', header_format)
+    worksheet.write('A3', 'Average Mean Search Diff. (days):', header_format)
+    worksheet.write('A4', 'Average Median Search Diff. (days):', header_format)
+    afs = findings["Average First Search"]; als = findings["Average Last Search"]
+    ams = findings["Average Mean Search"]; ads = findings["Average Median Search"]
+    if afs is not None: worksheet.write_number(0,1,afs,special_format)
+    else: worksheet.write_string(0,1," ",text_format)
+    if als is not None: worksheet.write_number(1,1,als,special_format)
+    else: worksheet.write_string(1,1," ",text_format)
+    if ams is not None: worksheet.write_number(2,1,ams,special_format)
+    else: worksheet.write_string(2,1," ",text_format)
+    if ads is not None: worksheet.write_number(3,1,ads,special_format)
+    else: worksheet.write_string(3,1," ",text_format)
     
-def main():
-    ### Step 1: Read input excel file containing application numbers & process into application folders
-    #err_fb = pull_reed_files.main()
-    #error_output.extend(err_fb)
+    # Write headers below important findings:
+    worksheet.write('A5', 'Application', header_format)
+    worksheet.write('B5', 'Filing Date', header_format)
+    worksheet.write('C5', 'Analyzed?', header_format)
+    worksheet.write('D5', 'FOAM to FS', header_format)
+    worksheet.write('E5', 'FOAM to LS', header_format)
+    worksheet.write('F5', 'FOAM to S Mean', header_format)
+    worksheet.write('G5', 'FOAM to S Median', header_format)
+    worksheet.write('H5', 'App. Type', header_format)
+    worksheet.write('I5', 'Examiner', header_format)
+    worksheet.write('J5', 'Art Unit', header_format)
+    worksheet.write('K5', 'Class/Subclass', header_format)
+    worksheet.write('L5', 'Status', header_format)
+    worksheet.write('M5', 'Status Date', header_format)
+    worksheet.write('N5', 'Publication No.', header_format)
+    worksheet.write('O5', 'Publication Date', header_format)
+    worksheet.write('P5', 'Patent No.', header_format)
+    worksheet.write('Q5', 'Patent Date', header_format)
+    worksheet.write('R5', 'FOAM Date', header_format)
+    worksheet.write('S5', 'Type2 SRNT Date(s)', header_format)
+    worksheet.write('T5', 'Type7 SRNT Date(s)', header_format)
+    worksheet.write('U5', 'Type8 SRNT Date(s)', header_format)
+    worksheet.write('V5', 'SRNT Visual Pass?', header_format)
+    worksheet.write('W5', 'No. of Active SRNT(s)', header_format)
+    worksheet.write('X5', 'SRNT Type(s)', header_format)
+    worksheet.write('Y5', 'Prel. Amendments', header_format)
+    worksheet.write('Z5', 'Restriction Requ.', header_format)
+    worksheet.write('AA5', 'Continuity Data', header_format)
+    worksheet.write('AB5', 'Continuation?', header_format)
+    worksheet.write('AC5', 'Active SRFW?', header_format)
 
+    # Write in data for each application.
+    row = 5; bin_trans = {True: "Yes", False: "No", None: "No"}
+    for key in keys:
+
+        worksheet.write_number(row,0,int(key),int_format)
+
+        filing_date = data_in[key]["f_date"]
+        if filing_date is not None: worksheet.write_string(row,1,filing_date,text_format)
+        else: worksheet.write_string(row,1," ",text_format)
+
+        worksheet.write_string(row,2,bin_trans[data_in[key]["analyze?"]],text_format)
+
+        r3 = data_in[key]["FOAM_FS_diff"]
+        if r3 is not None: worksheet.write_number(row,3,r3,int_format)
+        else: worksheet.write_string(row,3," ",text_format)
+
+        r4 = data_in[key]["FOAM_LS_diff"]
+        if r4 is not None: worksheet.write_number(row,4,r4,int_format)
+        else: worksheet.write_string(row,4," ",text_format)
+
+        r5 = data_in[key]["FOAM_S_mean"]
+        if r5 is not None: worksheet.write_number(row,5,r5,int_format)
+        else: worksheet.write_string(row,5," ",text_format)
+
+        r6 = data_in[key]["FOAM_S_median"]
+        if r6 is not None: worksheet.write_number(row,6,r6,int_format)
+        else: worksheet.write_string(row,6," ",text_format)
+
+        worksheet.write_string(row,7,data_in[key]["app_type"],text_format)
+        worksheet.write_string(row,8,data_in[key]["exam_name"],text_format)
+        worksheet.write_number(row,9,int(data_in[key]["art_unit"]),int_format)
+        worksheet.write_string(row,10,data_in[key]["cls_sbcls"],text_format)
+        worksheet.write_string(row,11,data_in[key]["stat"],text_format)
+        worksheet.write_string(row,12,data_in[key]["stat_date"],text_format)        
+        worksheet.write_string(row,13,data_in[key]["pub_num"],text_format)
+        worksheet.write_string(row,14,data_in[key]["pub_date"],text_format)
+        worksheet.write_string(row,15,data_in[key]["pat_num"],text_format)
+        worksheet.write_string(row,16,data_in[key]["pat_date"],text_format)
+
+
+        FOAM_date = data_in[key]["FOAM_date"]
+        if FOAM_date is not None: worksheet.write_string(row,17,FOAM_date,text_format)
+        else: worksheet.write_string(row,17," ",text_format)
+
+        t2dates = data_in[key]["SRNT_dates"]["Type2"]
+        t2dstringer = ""
+        for t2d in t2dates:
+            if t2dstringer == "":
+                t2dstringer  = t2dstringer  + t2d
+            else:
+                t2dstringer  = t2dstringer  + "; " + t2d
+        worksheet.write_string(row,18,t2dstringer,text_format)
+
+        t7dates = data_in[key]["SRNT_dates"]["Type7"]
+        t7dstringer = ""
+        for t7d in t7dates:
+            if t7dstringer == "":
+                t7dstringer  = t7dstringer  + t7d
+            else:
+                t7dstringer  = t7dstringer  + "; " + t7d
+        worksheet.write_string(row,19,t7dstringer,text_format)
+
+        t8dates = data_in[key]["SRNT_dates"]["Type8"]
+        t8dstringer = ""
+        for t8d in t8dates:
+            if t8dstringer == "":
+                t8dstringer  = t8dstringer  + t8d
+            else:
+                t8dstringer  = t8dstringer  + "; " + t8d
+        worksheet.write_string(row,20,t8dstringer,text_format)
+
+        worksheet.write_string(row,21,bin_trans[data_in[key]["SRNT_check"]],text_format)
+        worksheet.write_number(row,22,data_in[key]["SRNT_num"],int_format)
+
+        # Compiling Types of SRNTs
+        types_string = ""
+        for types in data_in[key]["SRNT_type"]:
+            if types_string == "":
+                types_string = types_string + types
+            else:
+                types_string = types_string + "; " + types
+        worksheet.write_string(row,23,types_string,text_format)
+
+        # Compiling Amendments
+        am_string = ""
+        for am in data_in[key]["pre_amend"]:
+            if am_string == "":
+                am_string = am_string + am
+            else:
+                am_string = am_string + "; " + am
+        worksheet.write_string(row,24,am_string,text_format)
+
+        # Compiling Restriction Requirements
+        rr_string = ""
+        for rr in data_in[key]["rest_requ"]:
+            if rr_string == "":
+                rr_string = rr_string + rr
+            else:
+                r_string = rr_string + "; " + rr
+        worksheet.write_string(row,25,rr_string,text_format)
+
+        # Compiling Continuity Data
+        cd_string = ""
+        for cd in data_in[key]["cont_data"]:
+            if cd_string == "":
+                cd_string = cd_string + cd
+            else:
+                cd_string = cd_string + "; " + cd
+        worksheet.write_string(row,26,cd_string,text_format)
+
+        worksheet.write_string(row,27,bin_trans[data_in[key]["continuation?"]],text_format)
+        worksheet.write_string(row,28,bin_trans[data_in[key]["SRFW_occur"]],text_format)       
+        
+        row += 1
+    
+    x = 1
+
+    workbook.close()
+
+def main():
+    print("Step 1")
+    # Step 1: Read input excel file containing application numbers & process into application folders
+    err_down = pull_reed_files.main()
+    # If there are application files missing, then stop execution
+    if err_down != []:
+        print("")
+        print("The following files could not be downloaded from Reed Tech:")
+        for err_d in err_down:
+            print(err_d)
+        print("")
+        #sys.exit("Execution has been terminated.")
+    # Otherwise, continue with execution and display number of applications
+    else:
+        num_of_apps = len(os.listdir(app_dir))
+        print("Analyzing {} Applications".format(num_of_apps))
+        print("")
+
+    print("")
+    print("")
+  
     # Step 2: Compile app_data (application, continuation, file wrapper info)
     app_folders = os.listdir(app_dir)
     # Loop through application folders 
@@ -324,10 +540,10 @@ def main():
         fwrap_path = os.path.join(app_dir, target, target, target + "-image_file_wrapper")
         
         # Type7 form recognition; also pull Type7 search dates
-        info_pass = type7_analysis.recognize_and_rip(info_pass,fwrap_path)
+        info_pass = type7_analysis.recognize_and_rip(info_pass,fwrap_path, resolution)
 
         # Type8 form recognition; also pull Type8 search dates
-        info_pass = type8_analysis.recognize_and_rip(info_pass,fwrap_path)
+        info_pass = type8_analysis.recognize_and_rip(info_pass,fwrap_path, resolution)
 
         # Type2 form recognition
         info_pass = type2_analysis.recognize(info_pass,fwrap_path)
@@ -356,6 +572,8 @@ def main():
     print("Step 5")
     print("100.0 percent complete")
     print("")
+    print("{} target applications identified".format(len(targets)))
+    print("")
         
     # Step 6: Extract dates from Type2 forms in target applications
     print_cnt = 1;
@@ -368,7 +586,7 @@ def main():
         for srnt in info_pass["SRNT_type"]:
 
             # OPTIONAL: percent complete print statement
-            print(print_cnt/(len(targets)*3)*100,"percent complete", end = "\r")
+            print((print_cnt/len(targets))*100,"percent complete", end = "\r")
 
             if srnt != "Type2": 
                 srnt_cnt += 1; print_cnt += 1
@@ -376,11 +594,14 @@ def main():
             else:
                 # Pull dates from Type2 forms
                 filename = info_pass["SRNT_files"][srnt_cnt]
-                info_pass = type2_analysis.read(info_pass,fwrap_path,filename)
+                info_pass = type2_analysis.read(info_pass,fwrap_path,filename, resolution)
                 srnt_cnt += 1; print_cnt += 1
 
         # Update the app_data dictionary
         app_data[target] = info_pass
+
+    if print_cnt == 1:
+        print("100.0 percent complete")
 
     print("", end="\n")
     print("")
@@ -394,6 +615,8 @@ def main():
     # OPTIONAL: complete print statement
     print("Step 7")
     print("100.0 percent complete")
+    print("")
+    print("{} applications flagged for analysis".format(len(targets)))
     print("")
 
     # Step 8: Look at analyze flag and analyze dates
@@ -444,17 +667,32 @@ def main():
         print(print_cnt/len(targets)*100,"percent complete", end = "\r")
         print_cnt+=1
 
+    if print_cnt == 1:
+        print("100.0 percent complete")
+
     print("", end="\n")
     print("")
 
     # Step 9: Write data to excel files (one full data file, one target data file)
     full_keys = app_data.keys()
     sub_keys = targets
+    if len(fs) == 0: afs = None
+    else: afs = float(statistics.mean(fs))
+    if len(ls) == 0: als = None
+    else: als = float(statistics.mean(ls))
+    if len(means) == 0: ams = None
+    else: ams = float(statistics.mean(means))
+    if len(medians) == 0: ads = None
+    else: ads = float(statistics.mean(medians))
+
+    findings = {"Average First Search": afs, "Average Last Search": als,
+                "Average Mean Search": ams, "Average Median Search": ads}
 
     # Write to target_app_data.xls
+    write_app_data(app_data, findings, targets, targetapp_file)
 
     # Write to all_app_data.xls
-    
+    write_app_data(app_data, findings, full_keys, allapp_file)
 
     # OPTIONAL: complete print statement
     print("Step 9")

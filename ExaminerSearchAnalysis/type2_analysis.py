@@ -12,6 +12,9 @@ from PIL import Image, ImageEnhance, ImageFilter
 import pytesseract
 import collections
 import re
+from datetime import date
+from datetime import datetime
+from multiprocessing.dummy import Pool as ThreadPool
 
 import pdf_to_image
 
@@ -147,6 +150,14 @@ def type2_line_screen(lines,num_max,img,fname):
     return True
 
 def type2_text_screen(fname, path):
+    # Helper function for pooling ocr processing
+    def pooled_tesseract_ocr(imagein):
+        imagein = imagein.convert('L')
+        imagein = imagein.filter(ImageFilter.SHARPEN)
+        tessdata_dir_config = '--tessdata-dir "C:\\Program Files (x86)\\Tesseract-OCR\\tessdata" -oem 2 -psm 3'
+        text_read = pytesseract.image_to_string(imagein, boxes = False, config=tessdata_dir_config)
+        return text_read
+
     # Read text using tesseract OCR
     imagein = Image.open(path)
     # First, crop the image into three snipets
@@ -154,27 +165,34 @@ def type2_text_screen(fname, path):
     imagein1 = imagein.crop((np.round(width/3).astype(int),np.round(height/15).astype(int),width,np.round(height/4).astype(int)))
     imagein2 = imagein.crop((np.round(width/3).astype(int)*2,np.round(height/15).astype(int),width,np.round(height/2).astype(int)))
     imagein3 = imagein.crop((np.round(width/3).astype(int),np.round(height/15).astype(int),width,np.round(height/2).astype(int)))
+    image_vect = [imagein1, imagein2, imagein3]
 
-    # Apply median filter to the snipets
-    imagein1 = imagein1.convert('L')
-    imagein1 = imagein1.filter(ImageFilter.SHARPEN)
-    imagein2 = imagein2.convert('L')
-    imagein2 = imagein2.filter(ImageFilter.SHARPEN)
-    imagein3 = imagein3.convert('L')
-    imagein3 = imagein3.filter(ImageFilter.SHARPEN)
+    pool = ThreadPool(5)
+    results = pool.map(pooled_tesseract_ocr, image_vect)
+    text_read1 = results[0]; text_read2 = results[1]; text_read3 = results[2]
+    pool.close()
+    pool.join()
 
-    ## Output images for analysis
-    #imagein1.save(path + "crop1")
-    #imagein2.save(path + "crop2")
-    #imagein3.save(path + "crop3")
+    ## Apply median filter to the snipets
+    #imagein1 = imagein1.convert('L')
+    #imagein1 = imagein1.filter(ImageFilter.SHARPEN)
+    #imagein2 = imagein2.convert('L')
+    #imagein2 = imagein2.filter(ImageFilter.SHARPEN)
+    #imagein3 = imagein3.convert('L')
+    #imagein3 = imagein3.filter(ImageFilter.SHARPEN)
 
-    tessdata_dir_config1 = '--tessdata-dir "C:\\Program Files (x86)\\Tesseract-OCR\\tessdata" -oem 2 -psm 3'
-    tessdata_dir_config2 = '--tessdata-dir "C:\\Program Files (x86)\\Tesseract-OCR\\tessdata" -oem 2 -psm 3'
-    tessdata_dir_config3 = '--tessdata-dir "C:\\Program Files (x86)\\Tesseract-OCR\\tessdata" -oem 2 -psm 3'
+    ### Output images for analysis
+    ##imagein1.save(path + "crop1")
+    ##imagein2.save(path + "crop2")
+    ##imagein3.save(path + "crop3")
 
-    text_read1 = pytesseract.image_to_string(imagein1, boxes = False, config=tessdata_dir_config1)
-    text_read2 = pytesseract.image_to_string(imagein2, boxes = False, config=tessdata_dir_config2)
-    text_read3 = pytesseract.image_to_string(imagein2, boxes = False, config=tessdata_dir_config3)
+    #tessdata_dir_config1 = '--tessdata-dir "C:\\Program Files (x86)\\Tesseract-OCR\\tessdata" -oem 2 -psm 3'
+    #tessdata_dir_config2 = '--tessdata-dir "C:\\Program Files (x86)\\Tesseract-OCR\\tessdata" -oem 2 -psm 3'
+    #tessdata_dir_config3 = '--tessdata-dir "C:\\Program Files (x86)\\Tesseract-OCR\\tessdata" -oem 2 -psm 3'
+
+    #text_read1 = pytesseract.image_to_string(imagein1, boxes = False, config=tessdata_dir_config1)
+    #text_read2 = pytesseract.image_to_string(imagein2, boxes = False, config=tessdata_dir_config2)
+    #text_read3 = pytesseract.image_to_string(imagein2, boxes = False, config=tessdata_dir_config3)
 
     if type2_text_score(text_read1) == True or type2_text_score(text_read2) == True or type2_text_score(text_read3) == True:
         return True
@@ -215,41 +233,66 @@ def type2_text_score(text_in):
     else:
         return False
 
-def extract_dates(filename):
+def extract_dates(filename, info_pass):
+    # Helper function for pooling ocr processing
+    def pooled_tesseract_ocr(imagein):
+        imagein = imagein.convert('L')
+        imagein = imagein.filter(ImageFilter.SHARPEN)
+        tessdata_dir_config = '--tessdata-dir "C:\\Program Files (x86)\\Tesseract-OCR\\tessdata" -oem 2 -psm 3'
+        text_read = pytesseract.image_to_string(imagein, boxes = False, config=tessdata_dir_config)
+        return text_read
+
     # Read text using tesseract OCR
     imagein = Image.open(filename)
+
     # First, crop the image into three snipets
     width, height = imagein.size
     imagein1 = imagein.crop((np.round(width/3).astype(int)*2,np.round(height/20).astype(int),width,np.round(height/20).astype(int)*19))
     imagein2 = imagein.crop((np.round(width/3).astype(int)*2 + 50,np.round(height/20).astype(int),width,np.round(height/20).astype(int)*19))
     imagein3 = imagein.crop((np.round(width/3).astype(int)*2 - 200,np.round(height/20).astype(int),width,np.round(height/20).astype(int)*19))
+    image_vect = [imagein1, imagein2, imagein3]
 
-    # Apply median filter to the snipets
-    imagein1 = imagein1.convert('L')
-    imagein1 = imagein1.filter(ImageFilter.SHARPEN)
-    imagein2 = imagein2.convert('L')
-    imagein2 = imagein2.filter(ImageFilter.SHARPEN)
-    imagein3 = imagein3.convert('L')
-    imagein3 = imagein3.filter(ImageFilter.SHARPEN)
+    pool = ThreadPool(5)
+    results = pool.map(pooled_tesseract_ocr, image_vect)
+    text_read1 = results[0]; text_read2 = results[1]; text_read3 = results[2]
+    pool.close()
+    pool.join()
 
-    ## Output images for analysis
-    #imagein1.save(os.path.join(output_dir, "crop1_.png"))
-    #imagein2.save(os.path.join(output_dir, "crop2_.png"))
-    #imagein3.save(os.path.join(output_dir, "crop3_.png"))
+    ## Apply median filter to the snipets
+    #imagein1 = imagein1.convert('L')
+    #imagein1 = imagein1.filter(ImageFilter.SHARPEN)
+    #imagein2 = imagein2.convert('L')
+    #imagein2 = imagein2.filter(ImageFilter.SHARPEN)
+    #imagein3 = imagein3.convert('L')
+    #imagein3 = imagein3.filter(ImageFilter.SHARPEN)
 
-    tessdata_dir_config1 = '--tessdata-dir "C:\\Program Files (x86)\\Tesseract-OCR\\tessdata" -oem 2 -psm 3'
-    tessdata_dir_config2 = '--tessdata-dir "C:\\Program Files (x86)\\Tesseract-OCR\\tessdata" -oem 2 -psm 3'
-    tessdata_dir_config3 = '--tessdata-dir "C:\\Program Files (x86)\\Tesseract-OCR\\tessdata" -oem 2 -psm 3'
+    ### Output images for analysis
+    ##imagein1.save(os.path.join(output_dir, "crop1_.png"))
+    ##imagein2.save(os.path.join(output_dir, "crop2_.png"))
+    ##imagein3.save(os.path.join(output_dir, "crop3_.png"))
 
-    text_read1 = pytesseract.image_to_string(imagein1, boxes = False, config=tessdata_dir_config1)
-    text_read2 = pytesseract.image_to_string(imagein2, boxes = False, config=tessdata_dir_config2)
-    text_read3 = pytesseract.image_to_string(imagein2, boxes = False, config=tessdata_dir_config3)
+    #tessdata_dir_config1 = '--tessdata-dir "C:\\Program Files (x86)\\Tesseract-OCR\\tessdata" -oem 2 -psm 3'
+    #tessdata_dir_config2 = '--tessdata-dir "C:\\Program Files (x86)\\Tesseract-OCR\\tessdata" -oem 2 -psm 3'
+    #tessdata_dir_config3 = '--tessdata-dir "C:\\Program Files (x86)\\Tesseract-OCR\\tessdata" -oem 2 -psm 3'
+
+    #text_read1 = pytesseract.image_to_string(imagein1, boxes = False, config=tessdata_dir_config1)
+    #text_read2 = pytesseract.image_to_string(imagein2, boxes = False, config=tessdata_dir_config2)
+    #text_read3 = pytesseract.image_to_string(imagein2, boxes = False, config=tessdata_dir_config3)
 
     # Process pulled text from Type2 forms
     dates_in = txt_date_process([text_read1,text_read2,text_read3])
     dates_out = []
     if len(dates_in[0])==0 and len(dates_in[1])==0 and len(dates_in[2])==0:
         return dates_out
+
+    # Find earliest date bound (bdate)
+    foamdate = info_pass["FOAM_date"]
+    fdate = info_pass["f_date"]
+    bdate = datetime.strptime(fdate, "%m-%d-%Y") # default bound date
+    if len(info_pass["pre_amend"]) != 0:
+        for pdater in info_pass["pre_amend"]:
+            pdate = datetime.strptime(pdater,"%m-%d-%Y")
+            if bdate < pdate: bdate = pdate
 
     # Find longest list
     longest = max(enumerate(dates_in), key = lambda tup: len(tup[1]))[0]
@@ -260,17 +303,23 @@ def extract_dates(filename):
     # Must occur at least twice to stay
     for date in dates_in[longest]:
         if date in dates_in[other1] or date in dates_in[other2]:
-            dates_out.append(date)
+            # Check date on bounds
+            date_check = datetime.strptime(date,"%Y/%m/%d")
+            if date_check >= bdate: dates_out.append(date)
 
     for date in dates_in[other1]:
         if date not in dates_out:
             if date in dates_in[other2]:
-                dates_out.append(date)
+                # Check date on bounds
+                date_check = datetime.strptime(date,"%Y/%m/%d")
+                if date_check >= bdate: dates_out.append(date)
 
     for date in dates_in[other2]:
         if date not in dates_out:
             if date in dates_in[other1]:
-                dates_out.append(date)
+                # Check date on bounds
+                date_check = datetime.strptime(date,"%Y/%m/%d")
+                if date_check >= bdate: dates_out.append(date)
 
     #print(filename)
     #print(dates_out)
@@ -319,9 +368,9 @@ def recognize(app_info, fwrap_path):
 
     return app_info
 
-def read(info_pass,fwrap_path,filename):
+def read(info_pass,fwrap_path,filename, resolution):
     # Create image files for analysis of full pdfs
-    pdf_to_image.main([filename],"all",fwrap_path)
+    pdf_to_image.main([filename],"all",fwrap_path,resolution)
 
     # Declare folder path
     folder_path = os.path.join(fwrap_path,filename)
@@ -329,7 +378,7 @@ def read(info_pass,fwrap_path,filename):
 
     for img_name in list_of_imgs:
         path = os.path.join(folder_path,img_name)
-        dates = extract_dates(path)
+        dates = extract_dates(path, info_pass)
 
         if dates == []:
             info_pass["SRNT_check"] = False
