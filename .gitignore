@@ -3,6 +3,14 @@
 
 app_data/
 ExaminerSearchAnalysis/app_data/
+COPY_50PatentSet2/
+ExaminerSearchAnalysis/COPY_50PatentSet2
+COPY_ManualResearch1_ins
+ExaminerSearchAnalysis/COPY_ManualResearch1_ins
+COPY_ManualResearch2_Ins
+ExaminerSearchAnalysis/COPY_ManualResearch2_Ins
+COPY_ReedFiles
+ExaminerSearchAnalysis/COPY_ReedFiles
 
 # User-specific files
 *.suo
