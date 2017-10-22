@@ -14,6 +14,10 @@ from datetime import date
 from datetime import datetime
 import statistics
 import xlsxwriter
+import pandas as pd
+from pandas import ExcelWriter
+from pandas import ExcelFile
+import math
 
 import type7_analysis, type8_analysis, type2_analysis, pdf_to_image, pull_reed_files
 
@@ -277,10 +281,13 @@ def examine_image_wrapper(app,path):
     # Succesful analysis; return True
     return True
 
-def write_app_data(data_in, findings, keys, file_out):
+def write_app_data(data_in, keys, file_out, jump, to_add):
     # Delete existing file if it exists
     if os.path.isfile(file_out) == True:
-        os.remove(file_out)
+        if os.path.isfile(os.path.join("output",file_out)) == True:
+            os.remove(os.path.join("output",file_out))
+        os.rename(file_out,os.path.join("output",file_out))
+        
 
     # Open a workbook and a worksheet
     workbook = xlsxwriter.Workbook(file_out)
@@ -312,16 +319,16 @@ def write_app_data(data_in, findings, keys, file_out):
     worksheet.write('A2', 'Average Last Search Diff. (days):', header_format)
     worksheet.write('A3', 'Average Mean Search Diff. (days):', header_format)
     worksheet.write('A4', 'Average Median Search Diff. (days):', header_format)
-    afs = findings["Average First Search"]; als = findings["Average Last Search"]
-    ams = findings["Average Mean Search"]; ads = findings["Average Median Search"]
-    if afs is not None: worksheet.write_number(0,1,afs,special_format)
-    else: worksheet.write_string(0,1," ",text_format)
-    if als is not None: worksheet.write_number(1,1,als,special_format)
-    else: worksheet.write_string(1,1," ",text_format)
-    if ams is not None: worksheet.write_number(2,1,ams,special_format)
-    else: worksheet.write_string(2,1," ",text_format)
-    if ads is not None: worksheet.write_number(3,1,ads,special_format)
-    else: worksheet.write_string(3,1," ",text_format)
+    #afs = findings["Average First Search"]; als = findings["Average Last Search"]
+    #ams = findings["Average Mean Search"]; ads = findings["Average Median Search"]
+    #if afs is not None: worksheet.write_number(0,1,afs,special_format)
+    #else: worksheet.write_string(0,1," ",text_format)
+    #if als is not None: worksheet.write_number(1,1,als,special_format)
+    #else: worksheet.write_string(1,1," ",text_format)
+    #if ams is not None: worksheet.write_number(2,1,ams,special_format)
+    #else: worksheet.write_string(2,1," ",text_format)
+    #if ads is not None: worksheet.write_number(3,1,ads,special_format)
+    #else: worksheet.write_string(3,1," ",text_format)
     
     # Write headers below important findings:
     worksheet.write('A5', 'Application', header_format)
@@ -354,8 +361,27 @@ def write_app_data(data_in, findings, keys, file_out):
     worksheet.write('AB5', 'Continuation?', header_format)
     worksheet.write('AC5', 'Active SRFW?', header_format)
 
+    # Write in previously found data
+    if jump != 0:
+        row = 5; col = 0
+        for adder in to_add:
+            col = 0
+            for add in adder:
+                if isinstance(add,str):
+                    worksheet.write_string(row,col,add,text_format)
+                elif isinstance(add,float) and math.isnan(add) == False:
+                    worksheet.write_number(row,col,add,float_format)
+                elif isinstance(add,int) and math.isnan(add) == False:
+                    worksheet.write_number(row,col,add,int_format)
+                else:
+                    worksheet.write_string(row,col,"",text_format)
+                col += 1
+            row += 1
+    else:
+        row = 5
+
     # Write in data for each application.
-    row = 5; bin_trans = {True: "Yes", False: "No", None: "No"}
+    bin_trans = {True: "Yes", False: "No", None: "No"}
     for key in keys:
 
         worksheet.write_number(row,0,int(key),int_format)
@@ -375,7 +401,7 @@ def write_app_data(data_in, findings, keys, file_out):
         else: worksheet.write_string(row,4," ",text_format)
 
         r5 = data_in[key]["FOAM_S_mean"]
-        if r5 is not None: worksheet.write_number(row,5,r5,int_format)
+        if r5 is not None: worksheet.write_number(row,5,r5,float_format)
         else: worksheet.write_string(row,5," ",text_format)
 
         r6 = data_in[key]["FOAM_S_median"]
@@ -392,7 +418,6 @@ def write_app_data(data_in, findings, keys, file_out):
         worksheet.write_string(row,14,data_in[key]["pub_date"],text_format)
         worksheet.write_string(row,15,data_in[key]["pat_num"],text_format)
         worksheet.write_string(row,16,data_in[key]["pat_date"],text_format)
-
 
         FOAM_date = data_in[key]["FOAM_date"]
         if FOAM_date is not None: worksheet.write_string(row,17,FOAM_date,text_format)
@@ -468,8 +493,12 @@ def write_app_data(data_in, findings, keys, file_out):
         worksheet.write_string(row,28,bin_trans[data_in[key]["SRFW_occur"]],text_format)       
         
         row += 1
-    
-    x = 1
+
+    # Write final findings:
+    worksheet.write_formula('B1', '=AVERAGE(D1:D' + str(row+1) + ')')
+    worksheet.write_formula('B2', '=AVERAGE(E1:E' + str(row+1) + ')')
+    worksheet.write_formula('B3', '=AVERAGE(F1:F' + str(row+1) + ')')
+    worksheet.write_formula('B4', '=AVERAGE(G1:G' + str(row+1) + ')')
 
     workbook.close()
 
@@ -493,9 +522,35 @@ def main():
 
     print("")
     print("")
+
+    # Step INT: figure out which apps have been analyzed
+    app_folders = os.listdir(app_dir)
+    if os.path.isfile(allapp_file) == True:
+        # all apps file
+        df = pd.read_excel(allapp_file, sheetname='Sheet1')
+        app_list = df["Average First Search Diff. (days):"].tolist()
+        jumper = len(app_list) + 1
+        to_add_all = df.iloc[4:jumper]
+        to_add_all = to_add_all.values.tolist()
+        # target apps file
+        df2 = pd.read_excel(targetapp_file, sheetname = 'Sheet1')
+        app_list_2 = df2["Average First Search Diff. (days):"].tolist()
+        jumper_target = len(app_list_2) + 1
+        to_add_target = df2.iloc[4:jumper_target]
+        to_add_target = to_add_target.values.tolist()
+        # Revmove analyzed apps from the list
+        app_list.remove("Average Last Search Diff. (days):")
+        app_list.remove("Average Mean Search Diff. (days):")
+        app_list.remove("Average Median Search Diff. (days):")
+        app_list.remove("Application")
+        for app_l in app_list:
+            app_p = str(app_l)
+            app_folders.remove(app_p)
+    else:
+        jumper = 0; jumper_target = 0
+        to_add_all = []; to_add_target = []
   
     # Step 2: Compile app_data (application, continuation, file wrapper info)
-    app_folders = os.listdir(app_dir)
     # Loop through application folders 
     print_cnt = 1
     print("Step 2")
@@ -660,7 +715,7 @@ def main():
             
         # "FOAM_S_median" : <float>
         median = float(statistics.median(all_diff_days))
-        app_data[target]["FOAM_S_mean"] = median
+        app_data[target]["FOAM_S_median"] = median
         medians.append(median)
 
         # OPTIONAL: percent complete print statement
@@ -676,23 +731,12 @@ def main():
     # Step 9: Write data to excel files (one full data file, one target data file)
     full_keys = app_data.keys()
     sub_keys = targets
-    if len(fs) == 0: afs = None
-    else: afs = float(statistics.mean(fs))
-    if len(ls) == 0: als = None
-    else: als = float(statistics.mean(ls))
-    if len(means) == 0: ams = None
-    else: ams = float(statistics.mean(means))
-    if len(medians) == 0: ads = None
-    else: ads = float(statistics.mean(medians))
-
-    findings = {"Average First Search": afs, "Average Last Search": als,
-                "Average Mean Search": ams, "Average Median Search": ads}
 
     # Write to target_app_data.xls
-    write_app_data(app_data, findings, targets, targetapp_file)
+    write_app_data(app_data, sub_keys, targetapp_file, jumper_target, to_add_target)
 
     # Write to all_app_data.xls
-    write_app_data(app_data, findings, full_keys, allapp_file)
+    write_app_data(app_data, full_keys, allapp_file, jumper, to_add_all)
 
     # OPTIONAL: complete print statement
     print("Step 9")
