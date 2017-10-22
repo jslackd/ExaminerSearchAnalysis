@@ -1,6 +1,7 @@
 """Patent Search Date Analysis Solution"""
 # Jonathan Slack
 # jslackd@gmail.com
+# Created 2017
 
 import numpy as np
 import cv2
