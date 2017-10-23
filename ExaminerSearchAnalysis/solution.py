@@ -578,7 +578,7 @@ def main():
     # Step 3: Identify targeted applications (round 1)
     tad = app_data.copy()
     # Must meet 4 conditions: 1. FOAM 2. NO restriction requirement 3. NO continuation 4. SRNT(s)
-    tad = {k1: v1 for k1, v1 in tad.items() if (v1["FOAM_date"] != None and 
+    tad = {k1: v1 for k1, v1 in tad.items() if (v1["FOAM_date"] is not None and 
             v1["rest_requ"] == [] and v1["continuation?"] == None and 
             v1["SRNT_num"] > 0)}
     targets = tad.keys()
