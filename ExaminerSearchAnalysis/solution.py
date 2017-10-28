@@ -164,7 +164,12 @@ def examine_application_info(app,path):
                 keys = list(row.items())
                 cont_DESC = keys[0][1]
                 # "cont_data" : <str>
-                if "is a continuation of" in cont_DESC.lower() and tic1 == 0:
+                if "is a continuation" in cont_DESC.lower() and tic1 == 0:
+                    # "continuation?" : None
+                    app_data[app]["continuation?"] = True
+                    app_data[app]["cont_data"].append("Continuation")
+                    tic1 += 1
+                elif "is a division" in cont_DESC.lower() and tic1 == 0:
                     # "continuation?" : None
                     app_data[app]["continuation?"] = True
                     app_data[app]["cont_data"].append("Continuation")
